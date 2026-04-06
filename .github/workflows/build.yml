@@ -37,3 +37,52 @@ jobs:
           severity: 'HIGH,CRITICAL'
           exit-code: '1'
           ignore-unfixed: true
+          
+  # Job 3: Build & Push a ECR (solo si Sonar y Trivy pasan y es push a main)
+  push_ecr:
+    name: Build & Push to ECR
+    runs-on: ubuntu-latest
+    needs: [sonarqube, trivy]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      IMAGE_TAG: ${{ vars.IMAGE_TAG || github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+
+      - name: Tag image with ECR URL
+        run: |
+          ECR_URL=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_URL/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_URL/$ECR_REPOSITORY:latest
+          echo "ECR_URL=$ECR_URL" >> $GITHUB_ENV
+
+      - name: Push image to ECR
+        run: |
+          docker push $ECR_URL/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_URL/$ECR_REPOSITORY:latest
+
+      - name: Output pushed image
+        run: |
+          echo "Pushed images:"
+          echo " - $ECR_URL/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo " - $ECR_URL/$ECR_REPOSITORY:latest"
+
