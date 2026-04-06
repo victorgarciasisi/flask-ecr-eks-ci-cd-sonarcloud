@@ -5,6 +5,8 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:   # Permite lanzar el workflow manualmente desde Actions
+
 jobs:
   # Job 1: SonarQube - Análisis de calidad
   sonarqube:
@@ -90,8 +92,9 @@ jobs:
   deploy_eks:
     name: Deploy to EKS
     runs-on: ubuntu-latest
-    needs: [push_ecr]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    #needs: [push_ecr]
+    #if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
